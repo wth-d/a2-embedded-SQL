@@ -250,6 +250,7 @@ class WasteWrangler:
             print(f"available drivers: {available_drivers}")
 
             cur.execute("DROP VIEW Hiredatesmatch;")
+            cur.execute("DROP VIEW EmployeesNotAvailable;")
             if (available_drivers == []):
                 print("schedule_trip: no availble drivers")
                 return False
@@ -280,17 +281,19 @@ class WasteWrangler:
             # pick a truck
             cur.execute('''SELECT DISTINCT Temp.tID
                            FROM (
-                           SELECT capacity, A.tID
-                           FROM AvailableTrucks A JOIN Truck T ON A.tID=T.tID
-                                                  JOIN TruckType Ttype ON T.truckType=Ttype.truckType
-                           WHERE wasteType=%s
-                           ORDER BY capacity DESC, A.tID) Temp;
+                               SELECT capacity, A.tID
+                               FROM AvailableTrucks A JOIN Truck T ON A.tID=T.tID
+                                                      JOIN TruckType Ttype ON T.truckType=Ttype.truckType
+                               WHERE wasteType=%s
+                               ORDER BY capacity DESC, A.tID) Temp;
                            ''', (wastetype,))
             available_trucks = []
             for row in cur:
                 available_trucks.append(row[0]); # does this work for views?
             print(f"available trucks: {available_trucks}")
 
+            cur.execute("DROP VIEW TripWithLength;")
+            cur.execute("DROP VIEW EmployeesNotAvailable;")
             if (available_trucks == []):
                 print("schedule_trip: no availble trucks")
                 return False
