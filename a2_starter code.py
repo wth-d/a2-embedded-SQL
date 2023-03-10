@@ -190,7 +190,7 @@ class WasteWrangler:
                 self.connection.rollback()
                 return False
             
-            cur.execute('''CREATE TEMPORARY VIEW Hiredatesmatch AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW Hiredatesmatch AS
                            SELECT DISTINCT D.eID
                            FROM Driver D JOIN Employee E ON D.eID=E.eID
                            WHERE (SELECT date(hireDate) - %s::date) <= 0;
@@ -203,7 +203,7 @@ class WasteWrangler:
                 print(row[0])
 
             # drivers whose hire date and waste type meet requirement
-##            cur.execute('''CREATE VIEW CandidatesD AS
+##            cur.execute('''CREATE OR REPLACE VIEW CandidatesD AS
 ##                           (SELECT DISTINCT D.eID
 ##                           FROM Driver D JOIN TruckType T ON D.truckType=T.truckType
 ##                           WHERE wasteType=%s)
@@ -230,13 +230,13 @@ class WasteWrangler:
             print(f"lower limit of time is {timelower}")
             print(f"upper limit is {timeupper}")
 
-            cur.execute('''CREATE TEMPORARY VIEW TripWithLength AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW TripWithLength AS
                            SELECT ttime, eID1, eID2, tID, length
                            FROM Trip T JOIN Route R ON T.rID=R.rID;
                            ''')
             # find those employees whose trip times overlap with
             # the [timelower, timeupper] interval
-            cur.execute('''CREATE TEMPORARY VIEW EmployeesNotAvailable AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW EmployeesNotAvailable AS
                            (SELECT eID1 AS eID FROM TripWithLength
                            WHERE (ttime < %(lower)s
                              and (ttime + make_interval(hours=>(length/5)::INTEGER)) > %(lower)s) or
@@ -251,7 +251,7 @@ class WasteWrangler:
                            
                            ''', {'lower': timelower, 'upper': timeupper})
             # the drivers that are available
-            cur.execute('''CREATE TEMPORARY VIEW AvailableDrivers AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW AvailableDrivers AS
                            (SELECT * FROM Hiredatesmatch)
                            EXCEPT
                            (SELECT * FROM EmployeesNotAvailable);
@@ -261,9 +261,8 @@ class WasteWrangler:
             for row in cur:
                 available_drivers.append(row[0]);
             print(f"available drivers: {available_drivers}")
-
-            cur.execute("DROP VIEW Hiredatesmatch;")
-            cur.execute("DROP VIEW EmployeesNotAvailable;")
+            
+            #cur.execute("DROP VIEW EmployeesNotAvailable;")
             if (available_drivers == []):
                 print("schedule_trip: no availble drivers")
                 cur.close()
@@ -271,7 +270,7 @@ class WasteWrangler:
                 return False
 
             # similar to drivers, find unavailable trucks
-            cur.execute('''CREATE TEMPORARY VIEW TrucksNotAvailable AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW TrucksNotAvailable AS
                            (SELECT tID FROM TripWithLength
                            WHERE (ttime < %(lower)s
                              and (ttime + make_interval(hours=>(length/5)::INTEGER)) > %(lower)s) or
@@ -280,12 +279,12 @@ class WasteWrangler:
                            
                            ''', {'lower': timelower, 'upper': timeupper})
             # trucks are also unavailable if maintained on same date
-            cur.execute('''CREATE TEMPORARY VIEW MaintainedTrucks AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW MaintainedTrucks AS
                            SELECT tID FROM Maintenance
                            WHERE mdate=date(%s)
                            ''', (time,))
             # the trucks that are available
-            cur.execute('''CREATE TEMPORARY VIEW AvailableTrucks AS
+            cur.execute('''CREATE OR REPLACE TEMPORARY VIEW AvailableTrucks AS
                            (SELECT tID FROM Truck)
                            EXCEPT
                            (SELECT * FROM TrucksNotAvailable)
@@ -308,10 +307,10 @@ class WasteWrangler:
                 # does this for loop/fetchone work for views? -> can cause a "no results to fetch" error
             print(f"available trucks: {available_trucks}")
 
-            cur.execute("DROP VIEW TripWithLength;")
-            cur.execute("DROP VIEW TrucksNotAvailable;")
-            cur.execute("DROP VIEW MaintainedTrucks;")
-            cur.execute("DROP VIEW AvailableTrucks;")
+            #cur.execute("DROP VIEW TripWithLength;")
+            #cur.execute("DROP VIEW TrucksNotAvailable;")
+            #cur.execute("DROP VIEW MaintainedTrucks;")
+            #cur.execute("DROP VIEW AvailableTrucks;")
             if (available_trucks == []):
                 print("schedule_trip: no availble trucks")
                 cur.close()
@@ -361,6 +360,12 @@ class WasteWrangler:
                 return False
             print(f"drivers picked: {first_driver}, {second_driver}")
 
+            # ensure eID1 > eID2
+            if first_driver < second_driver: # swap
+                temp = first_driver
+                first_driver = second_driver
+                second_driver = temp
+
             # pick a facility
             cur.execute('''SELECT fID, wasteType
                            FROM Facility
@@ -377,7 +382,7 @@ class WasteWrangler:
 
             cur.execute('''INSERT INTO Trip VALUES
                            (%s, %s, %s, %s, %s, %s, %s)
-                           ''', (rid, truckid, time, "null", first_driver,
+                           ''', (rid, truckid, time, None, first_driver,
                                  second_driver, fid_picked))
 
             #
