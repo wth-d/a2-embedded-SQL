@@ -249,7 +249,7 @@ class WasteWrangler:
                 available_drivers.append(row[0]);
             print(f"available drivers: {available_drivers}")
 
-            #cur.execute("DROP VIEW Hiredatesmatch;")
+            cur.execute("DROP VIEW Hiredatesmatch;")
             if (available_drivers == []):
                 print("schedule_trip: no availble drivers")
                 return False
