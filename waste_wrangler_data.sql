@@ -94,3 +94,6 @@ insert into route values
 --
 insert into trip values
 (1, 1, '2023-05-03 08:15:06', 17, 3, 1, 1);
+--insert into trip values
+--(2, 1, '2023-5-4 11:40', 19, 3, 2, 1);
+

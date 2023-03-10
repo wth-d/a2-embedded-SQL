@@ -55,20 +55,20 @@ class WasteWrangler:
         cur.execute("SELECT DISTINCT rID FROM Route;")
         rIDs = []
         for row in cur:
-            rIDs.append(row)
+            rIDs.append(row[0])
         return rIDs
 
     def find_route_info(self, rid: int) -> tuple:
         assert self.connection, "not connected"
 
         if rid not in self.list_of_rIDs():
-            return (,)
+            return tuple()
         
         cur = self.connection.cursor()
         cur.execute("SET search_path TO waste_wrangler;")
         cur.execute('''SELECT * FROM Route R
                        WHERE R.rID=%s;
-                       ''', rid)
+                       ''', (rid,))
         for row in cur:
             return row
 
@@ -166,7 +166,9 @@ class WasteWrangler:
             assert self.connection, "not connected"
             
             all_rIDs = self.list_of_rIDs()
+            print(f"list of rids: {all_rIDs}")
             if rid not in all_rIDs:
+                print("rid is not a valid rid")
                 return False
             
             route_info = self.find_route_info(rid)
@@ -176,12 +178,26 @@ class WasteWrangler:
 
             cur = self.connection.cursor()
             cur.execute("SET search_path TO waste_wrangler;")
+            
+            cur.execute('''SELECT * FROM Trip
+                           WHERE date(ttime)=date(%s);
+                           ''', (time,))
+            for row in cur:
+                print('''A trip has been scheduled for <rid> on the same 
+                day as <time>''')
+                return False
+            
             cur.execute('''CREATE TEMPORARY VIEW Hiredatesmatch AS
                            SELECT DISTINCT D.eID
                            FROM Driver D JOIN Employee E ON D.eID=E.eID
-                           WHERE (SELECT date(hireDate) - '%s'::date) <= 0;
+                           WHERE (SELECT date(hireDate) - %s::date) <= 0;
                            
-                           ''', (rid,))
+                           ''', (time,))
+            cur.execute('''SELECT * FROM Hiredatesmatch;
+            ''')
+            print("output of Hiredatesmatch(eID):")
+            for row in cur:
+                print(row[0])
 
             # drivers whose hire date and waste type meet requirement
 ##            cur.execute('''CREATE VIEW CandidatesD AS
@@ -200,6 +216,8 @@ class WasteWrangler:
             print(f"endtime is {endtime}")
             timelower = time - dt.timedelta(minutes=30) # lower limit
             timeupper = endtime + dt.timedelta(minutes=30)
+            print(f"lower limit of time is {timelower}")
+            print(f"upper limit is {timeupper}")
 
             cur.execute('''CREATE TEMPORARY VIEW TripWithLength AS
                            SELECT ttime, eID1, eID2, tID, length
@@ -248,11 +266,11 @@ class WasteWrangler:
             # trucks are also unavailable if maintained on same date
             cur.execute('''CREATE TEMPORARY VIEW MaintainedTrucks AS
                            SELECT tID FROM Maintenance
-                           WHERE date=date(%s)
+                           WHERE mdate=date(%s)
                            ''', (time,))
             # the trucks that are available
             cur.execute('''CREATE TEMPORARY VIEW AvailableTrucks AS
-                           (SELECT * FROM Truck)
+                           (SELECT tID FROM Truck)
                            EXCEPT
                            (SELECT * FROM TrucksNotAvailable)
                            EXCEPT
@@ -260,11 +278,13 @@ class WasteWrangler:
                            ''')
 
             # pick a truck
-            cur.execute('''SELECT DISTINCT A.tID
+            cur.execute('''SELECT DISTINCT Temp.tID
+                           FROM (
+                           SELECT capacity, A.tID
                            FROM AvailableTrucks A JOIN Truck T ON A.tID=T.tID
                                                   JOIN TruckType Ttype ON T.truckType=Ttype.truckType
                            WHERE wasteType=%s
-                           ORDER BY capacity DESC, A.tID
+                           ORDER BY capacity DESC, A.tID) Temp;
                            ''', (wastetype,))
             available_trucks = []
             for row in cur:
@@ -288,7 +308,7 @@ class WasteWrangler:
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
             # as it will show you all the details of the error that occurred:
-            # raise ex
+            raise ex
             self.connection.rollback()
             return False
 
@@ -533,8 +553,9 @@ assignment grade for passing these.
     try:
         # TODO: Change the values of the following variables to connect to your
         #  own database:
-        dbname = 'postgres'
-        user = ''
+        #dbname = 'postgres'
+        dbname = 'csc343h-hanwei1'
+        user = 'hanwei1'
         password = ''
 
         connected = ww.connect(dbname, user, password)
