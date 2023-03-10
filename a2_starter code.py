@@ -256,6 +256,7 @@ class WasteWrangler:
                            EXCEPT
                            (SELECT * FROM EmployeesNotAvailable);
                            ''') # Hiredatesmatch instead of CandidatesD
+            cur.execute("SELECT * FROM AvailableDrivers;")
             available_drivers = []
             for row in cur:
                 available_drivers.append(row[0]);
@@ -303,7 +304,8 @@ class WasteWrangler:
                            ''', (wastetype,))
             available_trucks = []
             for row in cur:
-                available_trucks.append(row[0]); # does this work for views?
+                available_trucks.append(row[0]);
+                # does this for loop/fetchone work for views? -> can cause a "no results to fetch" error
             print(f"available trucks: {available_trucks}")
 
             cur.execute("DROP VIEW TripWithLength;")
