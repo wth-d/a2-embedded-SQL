@@ -293,7 +293,9 @@ class WasteWrangler:
             print(f"available trucks: {available_trucks}")
 
             cur.execute("DROP VIEW TripWithLength;")
-            cur.execute("DROP VIEW EmployeesNotAvailable;")
+            cur.execute("DROP VIEW TrucksNotAvailable;")
+            cur.execute("DROP VIEW MaintainedTrucks;")
+            cur.execute("DROP VIEW AvailableTrucks;")
             if (available_trucks == []):
                 print("schedule_trip: no availble trucks")
                 return False
