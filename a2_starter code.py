@@ -394,7 +394,7 @@ class WasteWrangler:
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
             # as it will show you all the details of the error that occurred:
-            raise ex
+            #raise ex
             self.connection.rollback()
             return False
 
@@ -432,8 +432,8 @@ class WasteWrangler:
         """
         # TODO: implement this method
 
-        cur.close()
-        self.connection.commit()
+        #cur.close()
+        #self.connection.commit()
         pass
 
     def update_technicians(self, qualifications_file: TextIO) -> int:
@@ -462,8 +462,8 @@ class WasteWrangler:
         try:
             # TODO: implement this method
 
-            cur.close()
-            self.connection.commit()
+            #cur.close()
+            #self.connection.commit()
             pass
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
@@ -491,11 +491,32 @@ class WasteWrangler:
         """
         try:
             # TODO: implement this method
-            pass
+            sphere = set({eid}) # all partners checked
+            tobechecked = [eid,]
+            while len(tobechecked) != 0: # similar to DFS
+                checkid = tobechecked.pop()
+                cur.execute('''SELECT eID1, eID2 FROM Trip T
+                               WHERE T.eID1=%s or T.eID2=%s
+                               ''', (checkid, checkid));
+                
+                for row in cur:
+                    pid = -1
+                    if row[0] == eid:
+                        pid = row[1]
+                    else:
+                        pid = row[0]
+                    assert pid != -1, "error: pid==-1"
+                    
+                    if pid not in sphere:
+                        sphere.add(pid)
+                        tobechecked.append(pid)
+
+            sphere.remove(eid)
+            return list(sphere)
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
             # as it will show you all the details of the error that occurred:
-            # raise ex
+            raise ex
             return []
 
     def schedule_maintenance(self, date: dt.date) -> int:
