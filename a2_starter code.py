@@ -433,6 +433,9 @@ class WasteWrangler:
         # TODO: implement this method
         print("starting schedule_trips...")
 
+        assert self.connection, "not connected"
+        cur = self.connection.cursor()
+
         cur.execute('''SELECT DISTINCT wasteType
                        FROM Truck T JOIN TruckType Tp ON T.truckType=Tp.truckType
                        WHERE tID=%s;
@@ -449,7 +452,7 @@ class WasteWrangler:
                        (SELECT rID FROM Trip
                        WHERE date(ttime)=date(%s));
                        ''', (date,))
-        cur.execute('''SELECT rID, wasteType, length
+        cur.execute('''SELECT R1.rID, wasteType, length
                        FROM RoutesNotScheduled R1 JOIN Route R ON R1.rID=R.rID
                        ORDER BY rID
                        ''')
