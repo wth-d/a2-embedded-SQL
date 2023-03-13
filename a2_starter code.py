@@ -406,7 +406,7 @@ class WasteWrangler:
                is able to carry the waste type. Schedule these by ascending
                order of rIDs.
 
-            2. Starting from 8 a.m., find the earliest available pair
+            2. Starting from 8 a.m., find the pair
                of drivers who are available all day. Give preference
                based on hireDate (employees who have the most
                experience get priority), and break ties by choosing
@@ -431,10 +431,163 @@ class WasteWrangler:
         tests could use any valid value for <date>.
         """
         # TODO: implement this method
+        print("starting schedule_trips...")
 
-        #cur.close()
-        #self.connection.commit()
-        pass
+        cur.execute('''SELECT DISTINCT wasteType
+                       FROM Truck T JOIN TruckType Tp ON T.truckType=Tp.truckType
+                       WHERE tID=%s;
+                       ''', (tid,))
+        wastetypes = []
+        for row in cur:
+            wastetypes.append(row[0])
+        print(f"waste types of truck tid are: {wastetypes}")
+
+        # find routes (to be scheduled)
+        cur.execute('''CREATE OR REPLACE TEMPORARY VIEW RoutesNotScheduled AS
+                       (SELECT rID FROM Route)
+                       EXCEPT
+                       (SELECT rID FROM Trip
+                       WHERE date(ttime)=date(%s));
+                       ''', (date,))
+        cur.execute('''SELECT rID, wasteType, length
+                       FROM RoutesNotScheduled R1 JOIN Route R ON R1.rID=R.rID
+                       ORDER BY rID
+                       ''')
+        potential_routes = []
+        for row in cur:
+            if row[1] in wastetypes:
+                potential_routes.append(row)
+        print("potential_routes:", potential_routes)
+
+        # find drivers availble all day
+        cur.execute('''CREATE OR REPLACE TEMPORARY VIEW Hiredatesmatch AS
+                       SELECT DISTINCT D.eID
+                       FROM Driver D JOIN Employee E ON D.eID=E.eID
+                       WHERE (SELECT date(hireDate) - %s::date) <= 0;
+                       
+                       ''', (date,))
+##        cur.execute('''SELECT * FROM Hiredatesmatch;
+##        ''')
+##        print("output of Hiredatesmatch(eID):")
+##        for row in cur:
+##            print(row[0])
+        
+        # drivers who have a trip on this day
+        cur.execute('''CREATE OR REPLACE TEMPORARY VIEW HaveTripDrivers AS
+                       (SELECT eID1 AS eID
+                       FROM Trip
+                       WHERE date(ttime)=date(%s))
+                       UNION
+                       (SELECT eID2 AS eID
+                       FROM Trip
+                       WHERE date(ttime)=date(%s))
+                       ''', (date, date))
+        cur.execute('''CREATE OR REPLACE TEMPORARY VIEW AvailableDrivers AS
+                       (SELECT * FROM Hiredatesmatch)
+                       EXCEPT
+                       (SELECT * FROM HaveTripDrivers)
+                       ''')
+        cur.execute("SELECT * FROM AvailableDrivers;")
+        available_drivers = []
+        for row in cur:
+            available_drivers.append(row[0]);
+        print(f"available drivers: {available_drivers}")
+        
+        #cur.execute("DROP VIEW EmployeesNotAvailable;")
+        if (available_drivers == []):
+            print("schedule_trips: no availble drivers")
+            cur.close()
+            self.connection.rollback()
+            return 0
+
+        # pick an employee/driver
+        # first, find drivers who can drive the picked truckType
+        cur.execute('''SELECT DISTINCT D.eID FROM Driver D
+                       WHERE D.truckType=(
+                           SELECT truckType FROM Truck T
+                           WHERE T.tID=%s
+                       );
+                       ''', (tid,))
+        truckType_match = []
+        for row in cur:
+            truckType_match.append(row[0])
+
+        # order availble_drivers by hireDate and eID
+        cur.execute('''SELECT A.eID, hireDate
+                       FROM AvailableDrivers A JOIN Employee E ON A.eID=E.eID
+                       ORDER BY hireDate, eID
+                       ''')
+        available_drivers = [] # reset
+        print("available drivers sorted:")
+        for row in cur:
+            available_drivers.append(row[0]);
+            print(row)
+
+        first_driver = -1
+        for eid in available_drivers:
+            if eid in truckType_match:
+                first_driver = eid
+                break
+        if first_driver == -1:
+            print("no available driver matches the truckType")
+            return 0
+        second_driver = -1
+        for eid in available_drivers:
+            if eid != first_driver:
+                second_driver = eid
+                break
+        if second_driver == -1:
+            print("cannot find a second available driver")
+            return 0
+        print(f"drivers picked: {first_driver}, {second_driver}")
+
+        # ensure eID1 > eID2
+        if first_driver < second_driver: # swap
+            temp = first_driver
+            first_driver = second_driver
+            second_driver = temp
+
+        # schedule routes and pick a facility for each route
+        speed = 5.0 # kph
+        starttime = dt.time(8)
+        endtime = None
+        trips_scheduled = 0
+        for route in potential_routes: # rID, wasteType, length
+            print(f"trying to schedule route #{route[0]}")
+            endtime = starttime + dt.timedelta(hours=(route[2] / speed))
+            if endtime.time() > dt.time(16):
+                print("trip for route#{route[0]} is after 4pm")
+                # try the next route
+                continue
+            else:
+                print(f"route #{route[0]}: starttime is {starttime}")
+                print(f"     endtime is {endtime}")
+
+                # pick a facility
+                cur.execute('''SELECT fID, wasteType
+                               FROM Facility
+                               WHERE wasteType=%s
+                               ORDER BY fID
+                               ''', (route[1],))
+                fid_picked = -1
+                for row in cur:
+                    fid_picked = row[0]
+                    break
+                if fid_picked == -1:
+                    print(f"cannot find a facility with a right wasteType for route #{route[0]}")
+                    # try the next route
+                    
+                else:
+                    cur.execute('''INSERT INTO Trip VALUES
+                               (%s, %s, %s, %s, %s, %s, %s)
+                               ''', (route[0], tid, starttime, None, first_driver,
+                                     second_driver, fid_picked))
+                    trips_scheduled += 1
+                    starttime = endtime + dt.timedelta(minutes=30)
+
+        cur.close()
+        self.connection.commit()
+        return trips_scheduled
 
     def update_technicians(self, qualifications_file: TextIO) -> int:
         """Given the open file <qualifications_file> that follows the format
