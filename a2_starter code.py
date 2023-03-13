@@ -819,11 +819,49 @@ class WasteWrangler:
         """
         try:
             # TODO: implement this method
-            pass
+            print()
+            print("starting reroute_waste...")
+            assert self.connection, "not connected"
+
+            cur = self.connection.cursor()
+
+            # find facilities that take same wasteType as current facility
+            cur.execute('''SELECT F1.fID
+                           FROM Facility F1
+                           WHERE F1.wasteType=(
+                             SELECT F2.wasteType
+                             FROM Facility F2
+                             WHERE F2.fID=%s)
+                           ORDER BY F1.fID;
+                           ''', (fid,))
+            newfid = -1
+            for row in cur:
+                # pick a facility
+                newfid = row[0]
+                print(f"new fid: {newfid}")
+                break
+            if newfid == -1:
+                print("cannot find a facility with same wasteType")
+                return 0
+
+            # modify trips on day <date> to <fid>            
+            cur.execute('''UPDATE Trip
+                           SET fID = %s
+                           WHERE date(ttime) = date(%s) and fid = %s
+                           RETURNING *;
+                           ''', (newfid, date, fid))
+            reroutes = 0
+            for row in cur:
+                reroutes += 1
+            
+            cur.close()
+            self.connection.commit()
+            return reroutes
         except pg.Error as ex:
             # You may find it helpful to uncomment this line while debugging,
             # as it will show you all the details of the error that occurred:
             # raise ex
+            self.connection.rollback()
             return 0
 
     # =========================== Helper methods ============================= #
