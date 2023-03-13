@@ -82,7 +82,7 @@ class WasteWrangler:
         I.e., do NOT throw an error if making the connection fails.
 
         >>> ww = WasteWrangler()
-        >>> ww.connect("csc343h-marinat", "marinat", "")
+        >>> ww.connect("csc343h-hanwei1", "hanwei1", "")
         True
         >>> # In this example, the connection cannot be made.
         >>> ww.connect("invalid", "nonsense", "incorrect")
@@ -104,7 +104,7 @@ class WasteWrangler:
         I.e., do NOT throw an error if closing the connection failed.
 
         >>> ww = WasteWrangler()
-        >>> ww.connect("csc343h-marinat", "marinat", "")
+        >>> ww.connect("csc343h-hanwei1", "hanwei1", "")
         True
         >>> ww.disconnect()
         True
@@ -624,18 +624,22 @@ class WasteWrangler:
         """
         try:
             # TODO: implement this method
+            print()
+            print("starting update_technicans...")
             assert self.connection, "not connected"
 
             cur = self.connection.cursor()
             
             mdata = self._read_qualifications_file(qualifications_file)
+            print("mdata:")
+            print(mdata)
             # list[list[str, str, str]] - [fName, lName, truckType]
 
             valid_num = 0
             for technician in mdata:
                 # check whether the name belongs to an employee
                 # and find eid of this employee
-                name = f"{technician[0]} {technician[0]}"
+                name = f"{technician[0]} {technician[1]}"
                 cur.execute('''SELECT eid
                                FROM Employee
                                WHERE name=%s;
@@ -645,8 +649,10 @@ class WasteWrangler:
                     eid = row[0]
                     break
                 if eid == -1:
-                    print("employee '{name}' not found")
+                    print(f"employee '{name}' not found")
                     continue
+                else:
+                    print(f"eid of '{name}' is {eid}")
 
                 # verify that this employee is not a driver
                 cur.execute('''SELECT eID
@@ -678,8 +684,13 @@ class WasteWrangler:
                 cur.execute('''SELECT * FROM Technician
                                WHERE eID=%s and truckType=%s;
                                ''', (eid, technician[2]))
+                exists = False
                 for row in cur:
-                    print(f"entry already exists for {name}")
+                    print(f'''entry already exists for {name}, 
+                    {technician[2]}''')
+                    exists = True
+                    break
+                if exists:
                     continue
 
                 # insert the entry
@@ -934,8 +945,8 @@ assignment grade for passing these.
 
         # All routes for truck tid are scheduled on that day
         scheduled_trips = ww.schedule_trips(1, dt.datetime(2023, 5, 3))
-        #assert scheduled_trips == 0, \
-        #    f"[Schedule Trips] Expected 0, Got {scheduled_trips}"
+        assert scheduled_trips == 0, \
+            f"[Schedule Trips] Expected 0, Got {scheduled_trips}"
 
         # ----------------- Testing update_technicians  -----------------------#
 
@@ -946,8 +957,8 @@ assignment grade for passing these.
 
         qf = open('qualifications.txt', 'r')
         updated_technicians = ww.update_technicians(qf)
-        #assert updated_technicians == 2, \
-        #    f"[Update Technicians] Expected 2, Got {updated_technicians}"
+        assert updated_technicians == 2, \
+            f"[Update Technicians] Expected 2, Got {updated_technicians}"
 
         # ----------------- Testing workmate_sphere ---------------------------#
 
@@ -992,8 +1003,8 @@ assignment grade for passing these.
 if __name__ == '__main__':
     # Un comment-out the next two lines if you would like to run the doctest
     # examples (see ">>>" in the methods connect and disconnect)
-    # import doctest
-    # doctest.testmod()
+    #import doctest
+    #doctest.testmod()
 
     # TODO: Put your testing code here, or call testing functions such as
     #   this one:
