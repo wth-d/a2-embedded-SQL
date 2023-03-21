@@ -1,4 +1,4 @@
-"""CSC343 Assignment 2
+"""CSC343
 
 === CSC343 Winter 2023 ===
 Department of Computer Science,
